@@ -10,7 +10,7 @@ HOOPLA_TOKEN = os.environ.get("HOOPLA_TOKEN")
 HOOPLA_METRIC_ID = os.environ.get("HOOPLA_METRIC_ID")
 HOOPLA_API_URL = "https://api.hoopla.net/metrics"
 
-@app.route('/webhook', methods=['POST'])
+@app.route('/', methods=['POST'])
 def handle_dialpad_event():
     data = request.json
     
