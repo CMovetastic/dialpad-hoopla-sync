@@ -31,7 +31,9 @@ def handle_dialpad_event():
             
             # THE FIX: Using 'owner' instead of 'user'
             payload = {
-                "owner": user_path,
+                "owner": {
+                    "href": user_path
+                },
                 "value": 1
             }
             
