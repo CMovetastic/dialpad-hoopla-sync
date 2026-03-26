@@ -4,35 +4,40 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
+# --- CONFIGURATION ---
 HOOPLA_TOKEN = os.environ.get("HOOPLA_TOKEN")
 HOOPLA_METRIC_ID = os.environ.get("HOOPLA_METRIC_ID")
 HOOPLA_API_URL = "https://api.hoopla.net/metrics"
 
-@app.route('/webhook', methods=['POST'])
-def debug_webhook():
+@app.route('/', methods=['GET'])
+def home():
+    return "Service is Live! If you see this, the 'Front Door' is open.", 200
+
+@app.route('/', methods=['POST'])
+def handle_dialpad_event():
     data = request.json
-    app.logger.info("--- NEW EVENT RECEIVED FROM DIALPAD ---")
-    app.logger.info(f"Payload: {data}")
-
-    # Dialpad v2 usually nests call info under 'call' or 'event'
-    # Let's try to find the email in common locations
-    call_data = data.get('call', data) 
-    state = call_data.get('state')
+    print(f"Received from Dialpad: {data}")
     
-    # Try multiple ways to find the agent's email
-    agent_email = (
-        call_data.get('target', {}).get('email') or 
-        call_data.get('operator', {}).get('email') or
-        data.get('email')
-    )
-
-    app.logger.info(f"Detected State: {state} | Detected Email: {agent_email}")
-
-    if state == 'hangup' and agent_email:
-        app.logger.info(f"Attempting Hoopla Sync for {agent_email}...")
+    # Check for hangup state
+    if data and data.get('state') == 'hangup':
+        agent_email = data.get('target', {}).get('email')
         
-        url = f"https://api.hoopla.net/metrics/{HOOPLA_METRIC_ID}/values"
-        headers = {
-            "Authorization": f"Bearer {HOOPLA_TOKEN}",
-            "Content-Type": "application/json"
-        }
+        if agent_email:
+            hoopla_endpoint = f"{HOOPLA_API_URL}/{HOOPLA_METRIC_ID}/values"
+            payload = {"user": agent_email, "value": 1}
+            headers = {
+                "Authorization": f"Bearer {HOOPLA_TOKEN}",
+                "Content-Type": "application/json"
+            }
+            
+            try:
+                response = requests.post(hoopla_endpoint, json=payload, headers=headers)
+                print(f"Hoopla Sync: {response.status_code} for {agent_email}")
+            except Exception as e:
+                print(f"Connection Error: {e}")
+
+    return jsonify({"status": "received"}), 200
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
