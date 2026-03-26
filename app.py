@@ -11,24 +11,23 @@ HOOPLA_API_URL = "https://api.hoopla.net/metrics"
 
 @app.route('/', methods=['GET'])
 def home():
-    return "Service is Live! If you see this, the 'Front Door' is open.", 200
+    return "Service is Live!", 200
 
 @app.route('/', methods=['POST'])
 def handle_dialpad_event():
     data = request.json
-    print(f"Received from Dialpad: {data}")
     
-    # Check for hangup state
+    # Check if the call state is 'hangup'
     if data and data.get('state') == 'hangup':
+        # Dialpad puts email inside the 'target' object
         agent_email = data.get('target', {}).get('email')
         
         if agent_email:
-            # Strip any accidental spaces or slashes from your variables
-            base_url = HOOPLA_API_URL.strip().rstrip('/')
-            metric_id = HOOPLA_METRIC_ID.strip().strip('/')
+            # Clean up the ID and Token (removes accidental spaces/slashes)
+            metric_id = HOOPLA_METRIC_ID.strip()
+            token = HOOPLA_TOKEN.strip()
             
-            # Reconstruct the URL cleanly
-            hoopla_endpoint = f"{base_url}/{metric_id}/values"
+            hoopla_endpoint = f"{HOOPLA_API_URL}/{metric_id}/values"
             
             payload = {
                 "user": agent_email.lower().strip(),
@@ -36,27 +35,17 @@ def handle_dialpad_event():
             }
             
             headers = {
-                "Authorization": f"Bearer {HOOPLA_TOKEN.strip()}",
-                "Content-Type": "application/json",
-            }
-            
-            print(f"Sending to URL: {hoopla_endpoint}") # Debug line to see the final URL
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
             }
             
             try:
-                # This is the actual 'action' line
                 response = requests.post(hoopla_endpoint, json=payload, headers=headers)
-                
-                # These lines help us see what happened in the Render logs
-                print(f"Hoopla Sync: {response.status_code} for {agent_email}")
-                
-                # If Hoopla sends back an error (like that 500), this shows us WHY
+                print(f"Hoopla Sync Attempt: {response.status_code} for {agent_email}")
                 if response.status_code >= 400:
-                    print(f"Hoopla Error Response: {response.text}")
-
+                    print(f"Hoopla Error: {response.text}")
             except Exception as e:
-                # This catches connection issues (like if Hoopla's site is down)
-                print(f"Connection Error: {e}")
+                print(f"Request failed: {e}")
 
     return jsonify({"status": "received"}), 200
 
