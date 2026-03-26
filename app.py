@@ -27,13 +27,19 @@ def handle_dialpad_event():
         target = data.get('target', {})
         agent_email = target.get('email')
         
-        if agent_email and HOOPLA_TOKEN and HOOPLA_METRIC_ID:
+if agent_email:
+            # Clean up the ID and Token
             metric_id = HOOPLA_METRIC_ID.strip()
+            
+            # THE FIX: Hoopla often expects the user as a full relative path
+            # Instead of just "email@co.com", we send "/users/email@co.com"
+            user_path = f"/users/{agent_email.lower().strip()}"
+            
             hoopla_endpoint = f"{HOOPLA_API_URL}/{metric_id}/values"
             
             payload = {
-                "user": agent_email.lower().strip(),
-                "value": 1.0
+                "user": user_path,
+                "value": 1
             }
             
             headers = {
@@ -44,9 +50,10 @@ def handle_dialpad_event():
             
             try:
                 response = requests.post(hoopla_endpoint, json=payload, headers=headers)
-                print(f"Hoopla Sync: {response.status_code} for {agent_email}")
+                # This line will now print EVERYTHING so we can see the exact error
+                print(f"Hoopla Sync: {response.status_code} | Response: {response.text}")
             except Exception as e:
-                print(f"Hoopla Request Failed: {e}")
+                print(f"Request failed: {e}")
 
     return jsonify({"status": "received"}), 200
 
