@@ -20,19 +20,18 @@ def handle_dialpad_event():
     if not data:
         return jsonify({"status": "no data"}), 200
 
-    # Only process if the call state is 'hangup'
     if data.get('state') == 'hangup':
         target = data.get('target', {})
         agent_email = target.get('email')
         
         if agent_email and HOOPLA_TOKEN and HOOPLA_METRIC_ID:
             metric_id = HOOPLA_METRIC_ID.strip()
-            # Construct the User Path required by Hoopla
             user_path = f"/users/{agent_email.lower().strip()}"
             hoopla_endpoint = f"{HOOPLA_API_URL}/{metric_id}/values"
             
+            # THE FIX: Using 'owner' instead of 'user'
             payload = {
-                "user": user_path,
+                "owner": user_path,
                 "value": 1
             }
             
