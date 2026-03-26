@@ -33,12 +33,13 @@ def handle_dialpad_event():
             
             payload = {
                 "user": agent_email.lower().strip(),
-                "value": 1
+                "value": 1.0
             }
             
             headers = {
                 "Authorization": f"Bearer {HOOPLA_TOKEN.strip()}",
-                "Content-Type": "application/json"
+                "Content-Type": "application/vnd.hoopla.metric-value+json",
+                "Accept": "application/vnd.hoopla.metric-value+json"
             }
             
             try:
