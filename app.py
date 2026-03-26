@@ -31,9 +31,18 @@ def handle_dialpad_event():
             }
             
             try:
+                # This is the actual 'action' line
                 response = requests.post(hoopla_endpoint, json=payload, headers=headers)
+                
+                # These lines help us see what happened in the Render logs
                 print(f"Hoopla Sync: {response.status_code} for {agent_email}")
+                
+                # If Hoopla sends back an error (like that 500), this shows us WHY
+                if response.status_code >= 400:
+                    print(f"Hoopla Error Response: {response.text}")
+
             except Exception as e:
+                # This catches connection issues (like if Hoopla's site is down)
                 print(f"Connection Error: {e}")
 
     return jsonify({"status": "received"}), 200
