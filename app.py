@@ -23,11 +23,24 @@ def handle_dialpad_event():
         agent_email = data.get('target', {}).get('email')
         
         if agent_email:
-            hoopla_endpoint = f"{HOOPLA_API_URL}/{HOOPLA_METRIC_ID}/values"
-            payload = {"user": agent_email, "value": 1}
+            # Strip any accidental spaces or slashes from your variables
+            base_url = HOOPLA_API_URL.strip().rstrip('/')
+            metric_id = HOOPLA_METRIC_ID.strip().strip('/')
+            
+            # Reconstruct the URL cleanly
+            hoopla_endpoint = f"{base_url}/{metric_id}/values"
+            
+            payload = {
+                "user": agent_email.lower().strip(),
+                "value": 1
+            }
+            
             headers = {
-                "Authorization": f"Bearer {HOOPLA_TOKEN}",
-                "Content-Type": "application/json"
+                "Authorization": f"Bearer {HOOPLA_TOKEN.strip()}",
+                "Content-Type": "application/json",
+            }
+            
+            print(f"Sending to URL: {hoopla_endpoint}") # Debug line to see the final URL
             }
             
             try:
