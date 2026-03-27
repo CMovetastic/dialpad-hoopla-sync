@@ -71,18 +71,20 @@ def handle_dialpad_event():
     if user_id:
         token = get_access_token()
         if token:
-            # 1. Handle Call Count
-            current_calls = get_current_value(token, CALLS_METRIC_ID, user_id)
-            s1 = sync_to_hoopla(token, CALLS_METRIC_ID, user_id, current_calls + 1)
+            # --- 1. THE CALL COUNT FIX ---
+            # Instead of summing, we send a '1' but we make it unique.
+            # We'll send it as a fresh POST every time.
+            s1 = sync_to_hoopla(token, CALLS_METRIC_ID, user_id, 1)
 
-            # 2. Handle Talk Time
+            # --- 2. THE TALK TIME (Summing) ---
+            # We know this works, so we keep it!
             current_tt = get_current_value(token, TALK_TIME_METRIC_ID, user_id)
-            s2 = sync_to_hoopla(token, TALK_TIME_METRIC_ID, user_id, current_tt + duration_secs)
+            new_total_tt = current_tt + duration_secs
+            s2 = sync_to_hoopla(token, TALK_TIME_METRIC_ID, user_id, new_total_tt)
 
-            print(f"SUMMED: {agent_email} | Calls: {current_calls + 1} | TT: {current_tt + duration_secs}s")
+            print(f"REPORT: {agent_email} | Call Result: {s1} | New Total TT: {new_total_tt}s")
         else:
             print("Token error.")
     return jsonify({"status": "processed"}), 200
-
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
