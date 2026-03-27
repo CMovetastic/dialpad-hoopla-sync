@@ -1,53 +1,45 @@
 import os
+import json
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+from flask import Flask, request, jsonify
 import requests
 import base64
-from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# --- CONFIGURATION ---
-CLIENT_ID = os.environ.get("HOOPLA_CLIENT_ID", "").strip()
-CLIENT_SECRET = os.environ.get("HOOPLA_CLIENT_SECRET", "").strip()
-CALLS_METRIC_ID = os.environ.get("HOOPLA_CALLS_METRIC_ID", "").strip()
-TALK_TIME_METRIC_ID = os.environ.get("HOOPLA_TALK_TIME_METRIC_ID", "").strip()
+# --- CONFIG ---
+SHEET_ID = os.environ.get("GOOGLE_SHEET_ID")
+# Load the full JSON string from Render
+GOOGLE_JSON = json.loads(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON"))
 
-# --- THE MEMORY (Temporary tracker) ---
-# This keeps track of totals while the server is awake.
-stats_tracker = {
-    "calls": {},    # e.g. {"clare@move-tastic.com": 5}
-    "duration": {}  # e.g. {"clare@move-tastic.com": 120}
-}
+def get_sheet():
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(GOOGLE_JSON, scope)
+    client = gspread.authorize(creds)
+    return client.open_by_key(SHEET_ID).worksheet("Totals")
 
-USER_MAP = {
-    "elizabeth@move-tastic.com": "829dd5aa-8aba-411d-8802-c75fe76524df",
-    "clare@move-tastic.com": "7dca0f5e-03f3-47d9-a53c-63991412bf05",
-    "nicole@move-tastic.com": "2e545f80-22bf-4d9c-89a9-1faaa3a59f3d",
-    "nicholas@move-tastic.com": "dcca9e27-7eb1-4470-acca-d2aade7dfb3e",
-    "wes@move-tastic.com": "c34ddc9a-a54b-42d5-9bdf-7d6edac4a835",
-    "bailey@move-tastic.com": "92829845-daf3-40e3-a607-91140e9cb334"
-}
+def update_totals_and_get_new(email, new_duration_secs):
+    sheet = get_sheet()
+    cell = sheet.find(email)
+    
+    if cell:
+        # Get current values from columns B and C
+        current_calls = int(sheet.cell(cell.row, 2).value or 0)
+        current_dur = int(sheet.cell(cell.row, 3).value or 0)
+        
+        # New totals
+        new_calls = current_calls + 1
+        new_dur = current_dur + new_duration_secs
+        
+        # Update Sheet
+        sheet.update_cell(cell.row, 2, new_calls)
+        sheet.update_cell(cell.row, 3, new_dur)
+        
+        return new_calls, new_dur
+    return 1, new_duration_secs # Fallback
 
-def get_access_token():
-    url = "https://api.hoopla.net/oauth2/token"
-    auth_str = f"{CLIENT_ID}:{CLIENT_SECRET}"
-    encoded_auth = base64.b64encode(auth_str.encode('utf-8')).decode('utf-8')
-    headers = {"Authorization": f"Basic {encoded_auth}", "Content-Type": "application/x-www-form-urlencoded"}
-    payload = {"grant_type": "client_credentials"}
-    try:
-        res = requests.post(url, data=payload, headers=headers)
-        return res.json().get("access_token") if res.status_code == 200 else None
-    except: return None
-
-def sync_to_hoopla(token, metric_id, user_id, value):
-    url = f"https://api.hoopla.net/metrics/{metric_id}/values"
-    user_href = f"https://api.hoopla.net/users/{user_id}"
-    payload = {"owner": {"kind": "user", "href": user_href}, "value": int(value)}
-    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/vnd.hoopla.metric-value+json"}
-    res = requests.post(url, json=payload, headers=headers)
-    return res.status_code
-
-@app.route('/', methods=['GET'])
-def home(): return "Tracker Automation is Live!", 200
+# ... (Keep your get_access_token and sync_to_hoopla functions from before) ...
 
 @app.route('/', methods=['POST'])
 def handle_dialpad_event():
@@ -60,24 +52,14 @@ def handle_dialpad_event():
     user_id = USER_MAP.get(agent_email)
 
     if user_id:
-        # 1. Update our internal memory
-        stats_tracker["calls"][agent_email] = stats_tracker["calls"].get(agent_email, 0) + 1
-        stats_tracker["duration"][agent_email] = stats_tracker["duration"].get(agent_email, 0) + duration_secs
-
-        # 2. Get totals from memory
-        total_calls = stats_tracker["calls"][agent_email]
-        total_duration = stats_tracker["duration"][agent_email]
-
-        # 3. Push the NEW TOTALS to Hoopla
+        # 1. Update the "Memory" in Google Sheets and get the updated Daily Total
+        total_calls, total_duration = update_totals_and_get_new(agent_email, duration_secs)
+        
+        # 2. Push these Daily Totals to Hoopla
         token = get_access_token()
         if token:
-            s1 = sync_to_hoopla(token, CALLS_METRIC_ID, user_id, total_calls)
-            s2 = sync_to_hoopla(token, TALK_TIME_METRIC_ID, user_id, total_duration)
-            print(f"PUSHED TOTALS: {agent_email} | Calls: {total_calls} | Time: {total_duration}s")
-        else:
-            print("Token error.")
+            sync_to_hoopla(token, CALLS_METRIC_ID, user_id, total_calls)
+            sync_to_hoopla(token, TALK_TIME_METRIC_ID, user_id, total_duration)
+            print(f"SHEET UPDATED: {agent_email} | New Daily Calls: {total_calls} | New Daily Time: {total_duration}s")
             
     return jsonify({"status": "processed"}), 200
-
-if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
