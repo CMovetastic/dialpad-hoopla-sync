@@ -21,19 +21,27 @@ USER_MAP = {
 }
 
 def get_access_token():
-    """Fetches a fresh token using Client ID and Secret as JSON"""
+    """Fetches a fresh token using standard Form Encoding"""
     url = "https://api.hoopla.net/oauth2/token"
-    # Wrapping credentials in a JSON payload
+    
+    # Standard Form Data payload
     payload = {
         "grant_type": "client_credentials",
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET
+        "client_id": CLIENT_ID.strip(),
+        "client_secret": CLIENT_SECRET.strip()
     }
+    
+    # Explicitly setting the header for Form Data
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
+    
     try:
-        # Changed 'data=payload' to 'json=payload'
-        response = requests.post(url, json=payload) 
+        # We use 'data=payload' for form-encoded requests
+        response = requests.post(url, data=payload, headers=headers) 
         if response.status_code == 200:
             return response.json().get("access_token")
+        
         print(f"Token Error: {response.status_code} - {response.text}")
     except Exception as e:
         print(f"Token request failed: {e}")
