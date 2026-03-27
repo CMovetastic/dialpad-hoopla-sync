@@ -29,7 +29,8 @@ def handle_dialpad_event():
             
             # The "Ultra-Lean" payload with all brackets closed
             payload = {
-                "owner": {
+          "owner": {
+                    "kind": "user",
                     "href": user_path
                 },
                 "value": 1
