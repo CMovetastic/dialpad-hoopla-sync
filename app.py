@@ -20,25 +20,27 @@ USER_MAP = {
     "bailey@move-tastic.com": "92829845-daf3-40e3-a607-91140e9cb334"
 }
 
+import base64
+
 def get_access_token():
-    """Fetches a fresh token using standard Form Encoding"""
+    """Fetches a fresh token using Basic Auth Header (The most secure way)"""
     url = "https://api.hoopla.net/oauth2/token"
     
-    # Standard Form Data payload
-    payload = {
-        "grant_type": "client_credentials",
-        "client_id": CLIENT_ID.strip(),
-        "client_secret": CLIENT_SECRET.strip()
-    }
+    # 1. Combine ID and Secret with a colon
+    auth_str = f"{CLIENT_ID.strip()}:{CLIENT_SECRET.strip()}"
+    # 2. Encode it to Base64
+    encoded_auth = base64.b64encode(auth_str.encode()).decode()
     
-    # Explicitly setting the header for Form Data
     headers = {
+        "Authorization": f"Basic {encoded_auth}",
         "Content-Type": "application/x-www-form-urlencoded"
     }
     
+    # The body only needs the grant_type now
+    payload = {"grant_type": "client_credentials"}
+    
     try:
-        # We use 'data=payload' for form-encoded requests
-        response = requests.post(url, data=payload, headers=headers) 
+        response = requests.post(url, data=payload, headers=headers)
         if response.status_code == 200:
             return response.json().get("access_token")
         
