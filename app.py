@@ -21,16 +21,17 @@ USER_MAP = {
 }
 
 def get_access_token():
-    """Fetches a fresh token using Client ID and Secret"""
+    """Fetches a fresh token using Client ID and Secret as JSON"""
     url = "https://api.hoopla.net/oauth2/token"
-    # Hoopla expects a standard URL-encoded POST for OAuth
-    data = {
+    # Wrapping credentials in a JSON payload
+    payload = {
         "grant_type": "client_credentials",
         "client_id": CLIENT_ID,
         "client_secret": CLIENT_SECRET
     }
     try:
-        response = requests.post(url, data=data)
+        # Changed 'data=payload' to 'json=payload'
+        response = requests.post(url, json=payload) 
         if response.status_code == 200:
             return response.json().get("access_token")
         print(f"Token Error: {response.status_code} - {response.text}")
