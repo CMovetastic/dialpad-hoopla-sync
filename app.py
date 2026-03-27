@@ -28,27 +28,37 @@ def handle_dialpad_event():
     if not data or data.get('state') != 'hangup':
         return jsonify({"status": "ignored"}), 200
 
-    # Dialpad gives us the email automatically
-    agent_email = data.get('target', {}).get('email', '').lower().strip()
+    target = data.get('target', {})
+    agent_email = target.get('email', '').lower().strip()
     duration_secs = int(data.get('duration', 0) / 1000)
     
+    if not agent_email:
+        return jsonify({"status": "no_email"}), 200
+
     sheet = get_sheet()
     if sheet:
         try:
-            # The script looks for the email in Column A
-            cell = sheet.find(agent_email)
-            if cell:
-                # Update Calls (Col B) and Duration (Col C)
-                current_calls = int(sheet.cell(cell.row, 2).value or 0)
-                current_dur = int(sheet.cell(cell.row, 3).value or 0)
+            # 1. Get all emails from Column A
+            all_emails = [str(e).lower().strip() for e in sheet.col_values(1)]
+            
+            if agent_email in all_emails:
+                # --- UPDATE EXISTING USER ---
+                row_number = all_emails.index(agent_email) + 1
+                current_calls = int(sheet.cell(row_number, 2).value or 0)
+                current_dur = int(sheet.cell(row_number, 3).value or 0)
                 
-                sheet.update_cell(cell.row, 2, current_calls + 1)
-                sheet.update_cell(cell.row, 3, current_dur + duration_secs)
-                print(f"SYNC SUCCESS: {agent_email}")
+                sheet.update_cell(row_number, 2, current_calls + 1)
+                sheet.update_cell(row_number, 3, current_dur + duration_secs)
+                print(f"UPDATED: {agent_email} (Row {row_number})")
             else:
-                print(f"USER NOT FOUND IN SHEET: {agent_email}")
+                # --- AUTO-ADD NEW USER ---
+                # This adds a new row at the bottom: [Email, 1 Call, Duration]
+                new_row = [agent_email, 1, duration_secs]
+                sheet.append_row(new_row)
+                print(f"AUTO-ADDED NEW USER: {agent_email}")
+                
         except Exception as e:
-            print(f"Update Error: {e}")
+            print(f"Sheet error: {e}")
             
     return jsonify({"status": "processed"}), 200
 
