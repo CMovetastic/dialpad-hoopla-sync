@@ -29,11 +29,11 @@ def handle_dialpad_event():
             
             # WRAPPED PAYLOAD
             payload = {
-            "kind": "metric_value",
-                "value": 1,
-                "owner": {
-                    "kind": "user",
-                    "href": user_path
+            "metric_value": {
+                    "owner": {
+                        "href": user_path
+                    },
+                    "value": 1
                 }
             }
             headers = {
