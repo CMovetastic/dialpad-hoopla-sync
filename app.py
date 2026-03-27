@@ -12,9 +12,12 @@ CALLS_METRIC_ID = os.environ.get("HOOPLA_CALLS_METRIC_ID", "").strip()
 TALK_TIME_METRIC_ID = os.environ.get("HOOPLA_TALK_TIME_METRIC_ID", "").strip()
 
 USER_MAP = {
-    "clare@move-tastic.com": "829dd5aa-8aba-411d-8802-c75fe76524df",
-    "nicole@move-tastic.com": "PASTE_ID_HERE",
-    "jorge@move-tastic.com": "PASTE_ID_HERE"
+    "elizabeth@move-tastic.com": "829dd5aa-8aba-411d-8802-c75fe76524df",
+    "clare@move-tastic.com": "7dca0f5e-03f3-47d9-a53c-63991412bf05",
+    "nicole@move-tastic.com": "2e545f80-22bf-4d9c-89a9-1faaa3a59f3d",
+    "nicholas@move-tastic.com": "dcca9e27-7eb1-4470-acca-d2aade7dfb3e",
+    "wes@move-tastic.com": "c34ddc9a-a54b-42d5-9bdf-7d6edac4a835",
+    "bailey@move-tastic.com": "92829845-daf3-40e3-a607-91140e9cb334"
 }
 
 def get_access_token():
