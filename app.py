@@ -4,13 +4,13 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# --- CONFIGURATION ---
-HOOPLA_TOKEN = os.environ.get("HOOPLA_TOKEN", "")
-HOOPLA_METRIC_ID = os.environ.get("HOOPLA_METRIC_ID", "")
-HOOPLA_API_URL = "https://api.hoopla.net/metrics"
+# --- CREDENTIALS (Set these in Render Environment Variables) ---
+CLIENT_ID = os.environ.get("f05f82d7-bc91-400a-87be-e917675daa7f", "")
+CLIENT_SECRET = os.environ.get("c7555fdb3247f21f31b315d584b78384c07e551ac59e", "")
+CALLS_METRIC_ID = os.environ.get("ae07c81c-addc-4602-9891-921bd3e6bd35", "")  # Your existing ID
+TALK_TIME_METRIC_ID = os.environ.get("6123e233-7935-49ac-94cb-28ee5a6b3b24", "") # New ID
 
 # --- THE PHONE BOOK ---
-# Add everyone's email and their long ID from the terminal here
 USER_MAP = {
     "elizabeth@move-tastic.com": "829dd5aa-8aba-411d-8802-c75fe76524df",
     "clare@move-tastic.com": "7dca0f5e-03f3-47d9-a53c-63991412bf05",
@@ -20,52 +20,58 @@ USER_MAP = {
     "bailey@move-tastic.com": "92829845-daf3-40e3-a607-91140e9cb334"
 }
 
-@app.route('/', methods=['GET'])
-def home():
-    return "Service is Live!", 200
+
+def get_access_token():
+    """Automated login to Hoopla to get a fresh token"""
+    url = "https://api.hoopla.net/oauth2/token"
+    data = {
+        "grant_type": "client_credentials",
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET
+    }
+    response = requests.post(url, data=data)
+    if response.status_code == 200:
+        return response.json().get("access_token")
+    return None
+
+def sync_to_hoopla(token, metric_id, user_id, value):
+    """Sends a single metric update to Hoopla"""
+    url = f"https://api.hoopla.net/metrics/{metric_id}/values"
+    user_href = f"https://api.hoopla.net/users/{user_id}"
+    
+    payload = {
+        "owner": {"kind": "user", "href": user_href},
+        "value": value
+    }
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/vnd.hoopla.metric-value+json"
+    }
+    res = requests.post(url, json=payload, headers=headers)
+    return res.status_code
 
 @app.route('/', methods=['POST'])
 def handle_dialpad_event():
     data = request.json
-    if not data:
-        return jsonify({"status": "no data"}), 200
+    if not data or data.get('state') != 'hangup':
+        return jsonify({"status": "ignored"}), 200
 
-    if data.get('state') == 'hangup':
-        target = data.get('target', {})
-        agent_email = target.get('email', '').lower().strip()
-        
-        # Look up the ID in our phone book
-        user_id = USER_MAP.get(agent_email)
-        
-        if user_id and HOOPLA_TOKEN and HOOPLA_METRIC_ID:
-            metric_id = HOOPLA_METRIC_ID.strip()
-            hoopla_endpoint = f"{HOOPLA_API_URL}/{metric_id}/values"
-            user_href = f"https://api.hoopla.net/users/{user_id}"
-            
-            payload = {
-                "owner": {
-                    "kind": "user",
-                    "href": user_href
-                },
-                "value": 1
-            }
-            
-            headers = {
-                "Authorization": f"Bearer {HOOPLA_TOKEN.strip()}",
-                "Content-Type": "application/vnd.hoopla.metric-value+json",
-                "Accept": "application/vnd.hoopla.metric-value+json"
-            }
-            
-            try:
-                response = requests.post(hoopla_endpoint, json=payload, headers=headers)
-                print(f"Sync for {agent_email}: {response.status_code}")
-            except Exception as e:
-                print(f"Request failed: {e}")
-        else:
-            print(f"No ID found for {agent_email} - skipping sync.")
+    target = data.get('target', {})
+    agent_email = target.get('email', '').lower().strip()
+    duration = data.get('duration', 0) # Duration in seconds
+    user_id = USER_MAP.get(agent_email)
 
-    return jsonify({"status": "received"}), 200
+    if user_id:
+        token = get_access_token()
+        if token:
+            # 1. Log the Call Count
+            s1 = sync_to_hoopla(token, CALLS_METRIC_ID, user_id, 1)
+            # 2. Log the Talk Time (Duration)
+            s2 = sync_to_hoopla(token, TALK_TIME_METRIC_ID, user_id, duration)
+            
+            print(f"Sync for {agent_email}: Call({s1}) TalkTime({s2}) - {duration}s")
+    
+    return jsonify({"status": "processed"}), 200
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=os.environ.get("PORT", 5000))
