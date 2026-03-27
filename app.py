@@ -81,15 +81,17 @@ def handle_dialpad_event():
     user_id = USER_MAP.get(agent_email)
     
     if user_id:
-        token = get_access_token()
-        if token:
-            s1 = sync_to_hoopla(token, CALLS_METRIC_ID, user_id, 1)
-            s2 = sync_to_hoopla(token, TALK_TIME_METRIC_ID, user_id, duration_in_seconds)
-            print(f"SUCCESS: {agent_email} | Calls: {s1} | TalkTime: {s2} ({duration_in_seconds}s)")
-        else:
-            print("Could not get a fresh token.")
-    else:
-        print(f"User {agent_email} not found in USER_MAP.")
+            token = get_access_token()
+            if token:
+                # --- THE FORCE-COUNT FIX ---
+                # We send '1' as the value. 
+                # If 'Talk Time' works, this exact same structure MUST work.
+                s1 = sync_to_hoopla(token, CALLS_METRIC_ID, user_id, 1)
+                
+                # This one we know works:
+                s2 = sync_to_hoopla(token, TALK_TIME_METRIC_ID, user_id, duration_in_seconds)
+                
+                print(f"SUCCESS: {agent_email} | Calls: {s1} | TalkTime: {s2} ({duration_in_seconds}s)")
 
     return jsonify({"status": "processed"}), 200
 
