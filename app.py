@@ -16,7 +16,6 @@ def home():
 @app.route('/', methods=['POST'])
 def handle_dialpad_event():
     data = request.json
-    
     if not data:
         return jsonify({"status": "no data"}), 200
 
@@ -29,7 +28,7 @@ def handle_dialpad_event():
             user_path = f"/users/{agent_email.lower().strip()}"
             hoopla_endpoint = f"{HOOPLA_API_URL}/{metric_id}/values"
             
-            # This is the section that had the spacing error
+            # The structure Hoopla V1 requires
             payload = {
                 "kind": "metric_value",
                 "owner": {
@@ -45,6 +44,7 @@ def handle_dialpad_event():
             }
             
             try:
+                print(f"Attempting sync for: {agent_email}")
                 response = requests.post(hoopla_endpoint, json=payload, headers=headers)
                 print(f"Hoopla Sync: {response.status_code} | Response: {response.text}")
             except Exception as e:
