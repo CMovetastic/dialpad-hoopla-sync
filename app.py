@@ -4,7 +4,6 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# --- CONFIGURATION ---
 HOOPLA_TOKEN = os.environ.get("HOOPLA_TOKEN", "")
 HOOPLA_METRIC_ID = os.environ.get("HOOPLA_METRIC_ID", "")
 HOOPLA_API_URL = "https://api.hoopla.net/metrics"
@@ -28,13 +27,15 @@ def handle_dialpad_event():
             user_path = f"/users/{agent_email.lower().strip()}"
             hoopla_endpoint = f"{HOOPLA_API_URL}/{metric_id}/values"
             
-            # The structure Hoopla V1 requires
+            # WRAPPED PAYLOAD
             payload = {
-                "kind": "metric_value",
-                "owner": {
-                    "href": user_path
-                },
-                "value": 1
+                "metric_value": {
+                    "kind": "metric_value",
+                    "owner": {
+                        "href": user_path
+                    },
+                    "value": 1
+                }
             }
             
             headers = {
