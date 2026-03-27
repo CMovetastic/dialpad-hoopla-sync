@@ -1,16 +1,18 @@
 import os
 import requests
+import base64
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# --- CONFIGURATION (From Render Environment Variables) ---
-CLIENT_ID = os.environ.get("f05f82d7-bc91-400a-87be-e917675daa7f", "")
-CLIENT_SECRET = os.environ.get("c7555fdb3247f21f31b315d584b78384c07e551ac59e", "")
-CALLS_METRIC_ID = os.environ.get("ae07c81c-addc-4602-9891-921bd3e6bd35", "")  
-TALK_TIME_METRIC_ID = os.environ.get("6123e233-7935-49ac-94cb-28ee5a6b3b24", "") 
+# --- CONFIGURATION (Pulls from Render Environment Variables) ---
+CLIENT_ID = os.environ.get("HOOPLA_CLIENT_ID", "").strip()
+CLIENT_SECRET = os.environ.get("HOOPLA_CLIENT_SECRET", "").strip()
+CALLS_METRIC_ID = os.environ.get("HOOPLA_CALLS_METRIC_ID", "").strip()
+TALK_TIME_METRIC_ID = os.environ.get("HOOPLA_TALK_TIME_METRIC_ID", "").strip()
 
-# --- THE USER MAP ---
+# --- THE USER MAP (Email to Hoopla ID) ---
+# We still keep this map here so the script knows which ID belongs to which email.
 USER_MAP = {
     "elizabeth@move-tastic.com": "829dd5aa-8aba-411d-8802-c75fe76524df",
     "clare@move-tastic.com": "7dca0f5e-03f3-47d9-a53c-63991412bf05",
@@ -20,33 +22,26 @@ USER_MAP = {
     "bailey@move-tastic.com": "92829845-daf3-40e3-a607-91140e9cb334"
 }
 
-import base64
 
 def get_access_token():
-    """Fetches a fresh token using Basic Auth Header (The most secure way)"""
+    """Fetches a fresh token using Basic Auth"""
     url = "https://api.hoopla.net/oauth2/token"
-    
-    # 1. Combine ID and Secret with a colon
-    auth_str = f"{CLIENT_ID.strip()}:{CLIENT_SECRET.strip()}"
-    # 2. Encode it to Base64
-    encoded_auth = base64.b64encode(auth_str.encode()).decode()
+    auth_str = f"{CLIENT_ID}:{CLIENT_SECRET}"
+    encoded_auth = base64.b64encode(auth_str.encode('utf-8')).decode('utf-8')
     
     headers = {
         "Authorization": f"Basic {encoded_auth}",
         "Content-Type": "application/x-www-form-urlencoded"
     }
-    
-    # The body only needs the grant_type now
     payload = {"grant_type": "client_credentials"}
     
     try:
         response = requests.post(url, data=payload, headers=headers)
         if response.status_code == 200:
             return response.json().get("access_token")
-        
-        print(f"Token Error: {response.status_code} - {response.text}")
+        print(f"Auth Failed: {response.status_code} - {response.text}")
     except Exception as e:
-        print(f"Token request failed: {e}")
+        print(f"Token Request Error: {e}")
     return None
 
 def sync_to_hoopla(token, metric_id, user_id, value):
@@ -56,7 +51,7 @@ def sync_to_hoopla(token, metric_id, user_id, value):
     
     payload = {
         "owner": {"kind": "user", "href": user_href},
-        "value": int(value) # Ensure it's a whole number
+        "value": int(value)
     }
     headers = {
         "Authorization": f"Bearer {token}",
@@ -73,29 +68,28 @@ def home():
 @app.route('/', methods=['POST'])
 def handle_dialpad_event():
     data = request.json
-    if not data:
-        return jsonify({"status": "no data"}), 200
+    if not data or data.get('state') != 'hangup':
+        return jsonify({"status": "ignored"}), 200
 
-    # Process on hangup
-    if data.get('state') == 'hangup':
-        target = data.get('target', {})
-        agent_email = target.get('email', '').lower().strip()
-        
-        # --- THE FIX: Convert Milliseconds to Seconds ---
-        raw_duration = data.get('duration', 0)
-        duration_in_seconds = int(raw_duration / 1000) 
-        
-        user_id = USER_MAP.get(agent_email)
-        
-        if user_id:
-            token = get_access_token()
-            if token:
-                # 1. Log the Call Count
-                s1 = sync_to_hoopla(token, CALLS_METRIC_ID, user_id, 1)
-                # 2. Log the Talk Time (as actual seconds)
-                s2 = sync_to_hoopla(token, TALK_TIME_METRIC_ID, user_id, duration_in_seconds)
-                
-                print(f"SUCCESS: {agent_email} | Calls: {s1} | TalkTime: {s2} ({duration_in_seconds}s)")
+    target = data.get('target', {})
+    agent_email = target.get('email', '').lower().strip()
+    
+    # Convert Dialpad Milliseconds to Seconds
+    raw_duration = data.get('duration', 0)
+    duration_in_seconds = int(raw_duration / 1000)
+    
+    user_id = USER_MAP.get(agent_email)
+    
+    if user_id:
+        token = get_access_token()
+        if token:
+            s1 = sync_to_hoopla(token, CALLS_METRIC_ID, user_id, 1)
+            s2 = sync_to_hoopla(token, TALK_TIME_METRIC_ID, user_id, duration_in_seconds)
+            print(f"SUCCESS: {agent_email} | Calls: {s1} | TalkTime: {s2} ({duration_in_seconds}s)")
+        else:
+            print("Could not get a fresh token.")
+    else:
+        print(f"User {agent_email} not found in USER_MAP.")
 
     return jsonify({"status": "processed"}), 200
 
