@@ -27,14 +27,14 @@ def handle_dialpad_event():
             user_path = f"/users/{agent_email.lower().strip()}"
             hoopla_endpoint = f"{HOOPLA_API_URL}/{metric_id}/values"
             
-            # WRAPPED PAYLOAD
+            # The "Ultra-Lean" payload with all brackets closed
             payload = {
-           payload = {
                 "owner": {
                     "href": user_path
                 },
                 "value": 1
             }
+            
             headers = {
                 "Authorization": f"Bearer {HOOPLA_TOKEN.strip()}",
                 "Content-Type": "application/vnd.hoopla.metric-value+json",
