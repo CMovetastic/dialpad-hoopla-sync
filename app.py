@@ -29,12 +29,11 @@ def handle_dialpad_event():
             
             # WRAPPED PAYLOAD
             payload = {
-            "metric_value": {
-                    "owner": {
-                        "href": user_path
-                    },
-                    "value": 1
-                }
+           payload = {
+                "owner": {
+                    "href": user_path
+                },
+                "value": 1
             }
             headers = {
                 "Authorization": f"Bearer {HOOPLA_TOKEN.strip()}",
