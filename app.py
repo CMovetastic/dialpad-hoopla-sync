@@ -29,7 +29,9 @@ def handle_dialpad_event():
             user_path = f"/users/{agent_email.lower().strip()}"
             hoopla_endpoint = f"{HOOPLA_API_URL}/{metric_id}/values"
             
-           "kind": "metric_value",
+            # This is the section that had the spacing error
+            payload = {
+                "kind": "metric_value",
                 "owner": {
                     "href": user_path
                 },
