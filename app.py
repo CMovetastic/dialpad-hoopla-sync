@@ -29,8 +29,7 @@ def handle_dialpad_event():
             user_path = f"/users/{agent_email.lower().strip()}"
             hoopla_endpoint = f"{HOOPLA_API_URL}/{metric_id}/values"
             
-            # THE FIX: Using 'owner' instead of 'user'
-            payload = {
+           "kind": "metric_value",
                 "owner": {
                     "href": user_path
                 },
