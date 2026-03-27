@@ -20,18 +20,20 @@ def handle_dialpad_event():
 
     if data.get('state') == 'hangup':
         target = data.get('target', {})
-        agent_email = target.get('email')
+        agent_email = target.get('email', '').lower().strip()
         
-        if agent_email and HOOPLA_TOKEN and HOOPLA_METRIC_ID:
+        if HOOPLA_TOKEN and HOOPLA_METRIC_ID:
             metric_id = HOOPLA_METRIC_ID.strip()
-            user_path = f"/users/{agent_email.lower().strip()}"
             hoopla_endpoint = f"{HOOPLA_API_URL}/{metric_id}/values"
             
-            # The "Ultra-Lean" payload with all brackets closed
+            # --- THE FIX: USE THE INTERNAL ID WE FOUND ---
+            # For now, we are forcing it to use Clare's ID to test
+            user_href = "https://api.hoopla.net/users/829dd5aa-8aba-411d-8802-c75fe76524df"
+            
             payload = {
-          "owner": {
+                "owner": {
                     "kind": "user",
-                    "href": user_path
+                    "href": user_href
                 },
                 "value": 1
             }
