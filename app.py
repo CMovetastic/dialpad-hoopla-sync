@@ -5,22 +5,32 @@ from oauth2client.service_account import ServiceAccountCredentials
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
-
-# Only one ID needed: the Sheet!
 SHEET_ID = os.environ.get("GOOGLE_SHEET_ID", "").strip()
 
-def get_sheet():
+def get_google_client():
     raw_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "")
+    google_info = json.loads(raw_json.strip())
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(google_info, scope)
+    return gspread.authorize(creds)
+
+def update_tab(sheet_obj, email, duration_secs):
     try:
-        google_info = json.loads(raw_json.strip())
-        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(google_info, scope)
-        client = gspread.authorize(creds)
-        # Make sure your tab name is exactly "Totals"
-        return client.open_by_key(SHEET_ID).worksheet("Totals")
+        # Get all emails in Column A of this specific tab
+        all_emails = [str(e).lower().strip() for e in sheet_obj.col_values(1)]
+        
+        if email in all_emails:
+            row_idx = all_emails.index(email) + 1
+            curr_calls = int(sheet_obj.cell(row_idx, 2).value or 0)
+            curr_dur = int(sheet_obj.cell(row_idx, 3).value or 0)
+            
+            sheet_obj.update_cell(row_idx, 2, curr_calls + 1)
+            sheet_obj.update_cell(row_idx, 3, curr_dur + duration_secs)
+        else:
+            # Auto-add if user is missing from this tab
+            sheet_obj.append_row([email, 1, duration_secs])
     except Exception as e:
-        print(f"Sheet Access Error: {e}")
-        return None
+        print(f"Error updating tab: {e}")
 
 @app.route('/', methods=['POST'])
 def handle_dialpad_event():
@@ -28,42 +38,31 @@ def handle_dialpad_event():
     if not data or data.get('state') != 'hangup':
         return jsonify({"status": "ignored"}), 200
 
-    target = data.get('target', {})
-    agent_email = target.get('email', '').lower().strip()
+    agent_email = data.get('target', {}).get('email', '').lower().strip()
     duration_secs = int(data.get('duration', 0) / 1000)
     
     if not agent_email:
         return jsonify({"status": "no_email"}), 200
 
-    sheet = get_sheet()
-    if sheet:
-        try:
-            # 1. Get all emails from Column A
-            all_emails = [str(e).lower().strip() for e in sheet.col_values(1)]
-            
-            if agent_email in all_emails:
-                # --- UPDATE EXISTING USER ---
-                row_number = all_emails.index(agent_email) + 1
-                current_calls = int(sheet.cell(row_number, 2).value or 0)
-                current_dur = int(sheet.cell(row_number, 3).value or 0)
-                
-                sheet.update_cell(row_number, 2, current_calls + 1)
-                sheet.update_cell(row_number, 3, current_dur + duration_secs)
-                print(f"UPDATED: {agent_email} (Row {row_number})")
-            else:
-                # --- AUTO-ADD NEW USER ---
-                # This adds a new row at the bottom: [Email, 1 Call, Duration]
-                new_row = [agent_email, 1, duration_secs]
-                sheet.append_row(new_row)
-                print(f"AUTO-ADDED NEW USER: {agent_email}")
-                
-        except Exception as e:
-            print(f"Sheet error: {e}")
+    try:
+        client = get_google_client()
+        spreadsheet = client.open_by_key(SHEET_ID)
+        
+        # Update both tabs!
+        daily_sheet = spreadsheet.worksheet("Daily")
+        monthly_sheet = spreadsheet.worksheet("Monthly")
+        
+        update_tab(daily_sheet, agent_email, duration_secs)
+        update_tab(monthly_sheet, agent_email, duration_secs)
+        
+        print(f"SUCCESS: Recorded call for {agent_email} in Daily and Monthly tabs.")
+    except Exception as e:
+        print(f"Global Sheet Error: {e}")
             
     return jsonify({"status": "processed"}), 200
 
 @app.route('/', methods=['GET'])
-def home(): return "Dialpad-to-Sheet Sync is LIVE!", 200
+def home(): return "Dialpad Dual-Tab Sync is LIVE!", 200
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
