@@ -69,7 +69,10 @@ def handle_dialpad_event():
     if data.get('state') == 'hangup':
         target = data.get('target', {})
         agent_email = target.get('email', '').lower().strip()
-        duration = data.get('duration', 0) # Dialpad sends seconds
+        
+        # --- THE FIX: Convert Milliseconds to Seconds ---
+        raw_duration = data.get('duration', 0)
+        duration_in_seconds = int(raw_duration / 1000) 
         
         user_id = USER_MAP.get(agent_email)
         
@@ -78,14 +81,10 @@ def handle_dialpad_event():
             if token:
                 # 1. Log the Call Count
                 s1 = sync_to_hoopla(token, CALLS_METRIC_ID, user_id, 1)
-                # 2. Log the Talk Time (as raw seconds)
-                s2 = sync_to_hoopla(token, TALK_TIME_METRIC_ID, user_id, duration)
+                # 2. Log the Talk Time (as actual seconds)
+                s2 = sync_to_hoopla(token, TALK_TIME_METRIC_ID, user_id, duration_in_seconds)
                 
-                print(f"SUCCESS: {agent_email} | Calls: {s1} | TalkTime: {s2} ({duration}s)")
-            else:
-                print("Failed to retrieve token.")
-        else:
-            print(f"Email {agent_email} not in USER_MAP. Skipping.")
+                print(f"SUCCESS: {agent_email} | Calls: {s1} | TalkTime: {s2} ({duration_in_seconds}s)")
 
     return jsonify({"status": "processed"}), 200
 
