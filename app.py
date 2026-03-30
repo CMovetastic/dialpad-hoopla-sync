@@ -39,10 +39,34 @@ def handle_dialpad_event():
         return jsonify({"status": "ignored"}), 200
 
     agent_email = data.get('target', {}).get('email', '').lower().strip()
+    
+    # Dialpad sends duration in milliseconds, so we divide by 1000
     duration_secs = int(data.get('duration', 0) / 1000)
+    
+    # --- THE 15-SECOND FILTER ---
+    if duration_secs < 15:
+        print(f"SKIPPED: Call for {agent_email} was only {duration_secs}s (Below 15s threshold)")
+        return jsonify({"status": "ignored_short_call"}), 200
     
     if not agent_email:
         return jsonify({"status": "no_email"}), 200
+
+    try:
+        client = get_google_client()
+        spreadsheet = client.open_by_key(SHEET_ID)
+        
+        # Update both tabs
+        daily_sheet = spreadsheet.worksheet("Daily")
+        monthly_sheet = spreadsheet.worksheet("Monthly")
+        
+        update_tab(daily_sheet, agent_email, duration_secs)
+        update_tab(monthly_sheet, agent_email, duration_secs)
+        
+        print(f"SUCCESS: Recorded {duration_secs}s call for {agent_email}")
+    except Exception as e:
+        print(f"Global Sheet Error: {e}")
+            
+    return jsonify({"status": "processed"}), 200
 
     try:
         client = get_google_client()
